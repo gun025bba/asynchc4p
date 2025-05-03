@@ -1,57 +1,24 @@
-import asyncio
+from dataclasses import dataclass, field
+from typing import Dict, Any
+
 import aiohttp
-from typing import Optional, Dict, Any, Union
 from aiohttp import ClientTimeout, ClientSession
 
 
+@dataclass
 class AsyncHTTPClient:
-    __DEFAULT_SCHEME = "http://"
-    
-    def __init__(
-            self,
-            scheme: str,
-            host: str,
-            port: int = 80,
-            connect_timeout_sec=1,
-            read_timeout_sec=3,
-            concurrency=10,
-            headers: Optional[Dict[str, str]] = None,
-            verify_ssl: bool = True
-    ):
-        """
-        Initialize the async HTTP client.
-        
-        Args:
-            base_url: Base URL for all requests
-            timeout: Default timeout in seconds
-            headers: Default headers for all requests
-            verify_ssl: Whether to verify SSL certificates
-        """
-        base_url = f'{self.__DEFAULT_SCHEME}{host}:{port}'
+    __DEFAULT_SCHEME: str = field(default="http://", init=False)
 
-        client_timeout = ClientTimeout(
-            sock_connect=connect_timeout_sec,
-            sock_read=read_timeout_sec
-        )
-        connector = aiohttp.TCPConnector(
-            limit_per_host=concurrency,
-            force_close=False
-        )
+    scheme: str
+    host: str
+    port: int = 80
+    connect_timeout_sec: int = 1
+    read_timeout_sec: int = 3
+    concurrency: int = 10
 
-        client_session = ClientSession(
-            base_url=base_url,
-            timeout=client_timeout,
-
-        )
-
-        self.base_url = base_url
-        self.timeout = ClientTimeout(total=timeout)
-        self.headers = headers or {}
-        self.verify_ssl = verify_ssl
-        self._session: Optional[ClientSession] = None
+    _session: ClientSession = field(default=None, init=False)
 
     async def __aenter__(self):
-        """Context manager entry."""
         await self.start()
         return self
 
@@ -60,20 +27,29 @@ class AsyncHTTPClient:
         await self.close()
 
     async def start(self):
-        """Start the client session."""
-        if self._session is None:
-            self._session = ClientSession(
-                base_url=self.base_url,
-                timeout=self.timeout,
-                headers=self.headers,
-                connector=aiohttp.TCPConnector(verify_ssl=self.verify_ssl)
-            )
+        if self._session is not None:
+            return
+
+        base_url = f'{self.__DEFAULT_SCHEME}{self.host}:{self.port}'
+        timeout = ClientTimeout(
+            sock_connect=self.connect_timeout_sec,
+            sock_read=self.read_timeout_sec
+        )
+        connector = aiohttp.TCPConnector(
+            limit_per_host=self.concurrency,
+            force_close=True,
+            enable_cleanup_closed=True
+        )
+
+        self._session = ClientSession(
+            base_url=base_url,
+            timeout=timeout,
+            connector=connector
+        )
 
     async def close(self):
-        """Close the client session."""
-        if self._session:
-            await self._session.close()
-            self._session = None
+        await self._session.close()
+
 
     async def request(
             self,

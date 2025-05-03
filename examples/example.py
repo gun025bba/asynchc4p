@@ -19,6 +19,7 @@ async def main():
         }
         created_todo = await client.post("/todos", json=new_todo)
         print("POST Response:", created_todo)
+    AsyncHTTPClient()
 
     # Example 2: Manual session management
     client = AsyncHTTPClient(
